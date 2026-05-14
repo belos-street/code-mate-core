@@ -37,7 +37,8 @@
 
 ## 实现计划
 
-Phase 1-7 的完整文件清单和实现顺序见 [09-实现阶段](specs/09-implementation-phases.md)。
+- **详细执行计划**：[2026-05-14-go-migration.md](plans/2026-05-14-go-migration.md) — 按对话拆分的逐步实现指南
+- **Phase 文件清单**：[09-实现阶段](specs/09-implementation-phases.md)
 
 ---
 

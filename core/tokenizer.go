@@ -1,0 +1,256 @@
+package core
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+func NewParserContext(initialState string) *ParserContext {
+	return &ParserContext{
+		StateStack: []string{initialState},
+		Line:       1,
+		Col:        1,
+	}
+}
+
+func PushState(ctx *ParserContext, state string) *ParserContext {
+	newCtx := *ctx
+	newStack := make([]string, len(ctx.StateStack))
+	copy(newStack, ctx.StateStack)
+	newStack = append(newStack, state)
+	newCtx.StateStack = newStack
+	return &newCtx
+}
+
+func PopState(ctx *ParserContext) (*ParserContext, error) {
+	if len(ctx.StateStack) <= 1 {
+		return nil, errors.New("cannot pop the last state from stack")
+	}
+	newCtx := *ctx
+	newStack := make([]string, len(ctx.StateStack)-1)
+	copy(newStack, ctx.StateStack[:len(ctx.StateStack)-1])
+	newCtx.StateStack = newStack
+	return &newCtx, nil
+}
+
+func CurrentState(ctx *ParserContext) string {
+	return ctx.StateStack[len(ctx.StateStack)-1]
+}
+
+func SplitTokenByLineBreak(text, tokenScope, fallbackScope string, startLine, startCol int) []Token {
+	var tokens []Token
+	remaining := text
+	currentLine := startLine
+	currentCol := startCol
+
+	for len(remaining) > 0 {
+		lineBreakIndex := strings.IndexByte(remaining, '\n')
+
+		if lineBreakIndex == -1 {
+			tokens = append(tokens, Token{
+				Text:  remaining,
+				Scope: tokenScope,
+				Line:  currentLine,
+				Col:   [2]int{currentCol, currentCol + len(remaining) - 1},
+				Style: TokenStyle{},
+			})
+			break
+		}
+
+		isCRLF := lineBreakIndex > 0 && remaining[lineBreakIndex-1] == '\r'
+		var lineBreakChar string
+		if isCRLF {
+			lineBreakChar = remaining[lineBreakIndex-1 : lineBreakIndex+1]
+		} else {
+			lineBreakChar = remaining[lineBreakIndex : lineBreakIndex+1]
+		}
+
+		var beforeLineBreak string
+		if isCRLF {
+			beforeLineBreak = remaining[:lineBreakIndex-1]
+		} else {
+			beforeLineBreak = remaining[:lineBreakIndex]
+		}
+
+		if beforeLineBreak != "" {
+			beforeToken := Token{
+				Text:  beforeLineBreak,
+				Scope: tokenScope,
+				Line:  currentLine,
+				Col:   [2]int{currentCol, currentCol + len(beforeLineBreak) - 1},
+				Style: TokenStyle{},
+			}
+			tokens = append(tokens, beforeToken)
+			currentCol = beforeToken.Col[1] + 1
+		}
+
+		tokens = append(tokens, Token{
+			Text:  lineBreakChar,
+			Scope: fallbackScope,
+			Line:  currentLine,
+			Col:   [2]int{currentCol, currentCol + len(lineBreakChar) - 1},
+			Style: TokenStyle{},
+		})
+
+		currentLine++
+		currentCol = 1
+
+		var sliceStart int
+		if isCRLF {
+			sliceStart = lineBreakIndex - 1
+		} else {
+			sliceStart = lineBreakIndex
+		}
+		remaining = remaining[sliceStart+len(lineBreakChar):]
+	}
+
+	return tokens
+}
+
+var lineBreakRegex = regexp.MustCompile(`^\r?\n`)
+
+func MatchToken(code string, ctx *ParserContext, spec *TokenizerSpec) (*Token, *ParserContext) {
+	if len(code) == 0 {
+		return nil, ctx
+	}
+
+	currentState := CurrentState(ctx)
+	rules, ok := spec.Rules[currentState]
+
+	if ok {
+		for _, rule := range rules {
+			match := rule.Regex.FindStringIndex(code)
+			if match == nil || match[0] != 0 {
+				continue
+			}
+
+			matchedText := code[:match[1]]
+			token := Token{
+				Text:  matchedText,
+				Scope: rule.Scope,
+				Line:  ctx.Line,
+				Col:   [2]int{ctx.Col, ctx.Col + len(matchedText) - 1},
+				Style: TokenStyle{},
+			}
+
+			newCtx := *ctx
+			if rule.PushState != "" {
+				newStack := make([]string, len(ctx.StateStack))
+				copy(newStack, ctx.StateStack)
+				newStack = append(newStack, rule.PushState)
+				newCtx.StateStack = newStack
+			}
+			if rule.PopState {
+				if len(newCtx.StateStack) > 1 {
+					newStack := make([]string, len(newCtx.StateStack)-1)
+					copy(newStack, newCtx.StateStack[:len(newCtx.StateStack)-1])
+					newCtx.StateStack = newStack
+				}
+			}
+			newCtx.Col = token.Col[1] + 1
+
+			return &token, &newCtx
+		}
+	}
+
+	if len(code) > 0 {
+		char := string(code[0])
+		token := Token{
+			Text:  char,
+			Scope: spec.FallbackScope,
+			Line:  ctx.Line,
+			Col:   [2]int{ctx.Col, ctx.Col},
+			Style: TokenStyle{},
+		}
+		return &token, &ParserContext{
+			StateStack: newStateStack(ctx.StateStack),
+			Line:       ctx.Line,
+			Col:        ctx.Col + 1,
+		}
+	}
+
+	return nil, ctx
+}
+
+func newStateStack(original []string) []string {
+	s := make([]string, len(original))
+	copy(s, original)
+	return s
+}
+
+func Parse(code string, spec *TokenizerSpec) TokenStream {
+	var rows TokenStream
+	var currentRowTokens []Token
+	remainingCode := code
+	ctx := NewParserContext(spec.InitialState)
+
+	for len(remainingCode) > 0 {
+		lineBreakMatch := lineBreakRegex.FindStringIndex(remainingCode)
+		if lineBreakMatch != nil && lineBreakMatch[0] == 0 {
+			lineBreakText := remainingCode[:lineBreakMatch[1]]
+			currentRowTokens = append(currentRowTokens, Token{
+				Text:  lineBreakText,
+				Scope: spec.FallbackScope,
+				Line:  ctx.Line,
+				Col:   [2]int{ctx.Col, ctx.Col + len(lineBreakText) - 1},
+				Style: TokenStyle{},
+			})
+
+			rows = append(rows, currentRowTokens)
+			currentRowTokens = []Token{}
+			ctx.Line++
+			ctx.Col = 1
+
+			remainingCode = remainingCode[lineBreakMatch[1]:]
+			continue
+		}
+
+		token, newCtx := MatchToken(remainingCode, ctx, spec)
+
+		if token == nil {
+			remainingCode = remainingCode[1:]
+			ctx.Col++
+			continue
+		}
+
+		if strings.Contains(token.Text, "\n") {
+			splitTokens := SplitTokenByLineBreak(
+				token.Text,
+				token.Scope,
+				spec.FallbackScope,
+				token.Line,
+				token.Col[0],
+			)
+
+			for _, splitToken := range splitTokens {
+				if strings.Contains(splitToken.Text, "\n") {
+					currentRowTokens = append(currentRowTokens, splitToken)
+					rows = append(rows, currentRowTokens)
+					currentRowTokens = []Token{}
+					ctx.StateStack = newStateStack(newCtx.StateStack)
+					ctx.Line = splitToken.Line + 1
+					ctx.Col = 1
+				} else {
+					currentRowTokens = append(currentRowTokens, splitToken)
+					ctx.StateStack = newStateStack(newCtx.StateStack)
+					ctx.Line = splitToken.Line
+					ctx.Col = splitToken.Col[1] + 1
+				}
+			}
+		} else {
+			currentRowTokens = append(currentRowTokens, *token)
+			ctx.StateStack = newStateStack(newCtx.StateStack)
+			ctx.Line = newCtx.Line
+			ctx.Col = newCtx.Col
+		}
+
+		remainingCode = remainingCode[len(token.Text):]
+	}
+
+	if len(currentRowTokens) > 0 {
+		rows = append(rows, currentRowTokens)
+	}
+
+	return rows
+}
