@@ -1,6 +1,8 @@
 package darkplus
 
-var PhpStyles = map[string]string{
+import "code-mate-core/theme"
+
+var PhpStyles = theme.ThemeStyleMap{
 	"comment.block.php":              "color: #6A9955; font-style: italic;",
 	"comment.line.double-slash.php":  "color: #6A9955;",
 	"comment.line.number-sign.php":   "color: #6A9955;",

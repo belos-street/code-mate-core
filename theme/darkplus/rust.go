@@ -1,6 +1,8 @@
 package darkplus
 
-var RustStyles = map[string]string{
+import "code-mate-core/theme"
+
+var RustStyles = theme.ThemeStyleMap{
 	"comment.block.rust":            "color: #6A9955; font-style: italic;",
 	"comment.line.double-slash.rust": "color: #6A9955;",
 	"constant.language.boolean.rust": "color: #569CD6;",

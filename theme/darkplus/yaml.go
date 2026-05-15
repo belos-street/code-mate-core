@@ -1,6 +1,8 @@
 package darkplus
 
-var YamlStyles = map[string]string{
+import "code-mate-core/theme"
+
+var YamlStyles = theme.ThemeStyleMap{
 	"comment.line.number-sign.yaml":          "color: #6A9955;",
 	"constant.language.boolean.yaml":         "color: #569CD6;",
 	"constant.language.null.yaml":            "color: #569CD6;",

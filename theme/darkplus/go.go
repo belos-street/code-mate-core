@@ -1,6 +1,8 @@
 package darkplus
 
-var GoStyles = map[string]string{
+import "code-mate-core/theme"
+
+var GoStyles = theme.ThemeStyleMap{
 	"comment.block.go":               "color: #6A9955; font-style: italic;",
 	"comment.line.double-slash.go":   "color: #6A9955;",
 	"constant.language.boolean.go":   "color: #569CD6;",

@@ -1,6 +1,8 @@
 package darkplus
 
-var JsStyles = map[string]string{
+import "code-mate-core/theme"
+
+var JsStyles = theme.ThemeStyleMap{
 	"comment.block.js":                        "color: #6A9955; font-style: italic;",
 	"comment.line.double-slash.js":            "color: #6A9955;",
 	"constant.language.boolean.js":            "color: #569CD6;",

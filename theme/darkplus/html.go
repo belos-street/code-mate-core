@@ -1,6 +1,8 @@
 package darkplus
 
-var HtmlStyles = map[string]string{
+import "code-mate-core/theme"
+
+var HtmlStyles = theme.ThemeStyleMap{
 	"comment.block.html":                "color: #6A9955; font-style: italic;",
 	"constant.character.entity.html":    "color: #D7BA7D;",
 	"entity.name.tag.html":              "color: #569CD6;",

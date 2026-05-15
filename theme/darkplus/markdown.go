@@ -1,6 +1,8 @@
 package darkplus
 
-var MarkdownStyles = map[string]string{
+import "code-mate-core/theme"
+
+var MarkdownStyles = theme.ThemeStyleMap{
 	"comment.block.markdown":               "color: #6A9955; font-style: italic;",
 	"markup.bold.markdown":                 "color: #DCDCAA; font-weight: bold;",
 	"markup.code.indented.markdown":        "color: #CE9178;",
