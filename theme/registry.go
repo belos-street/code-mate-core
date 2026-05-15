@@ -63,6 +63,17 @@ func ListThemes() []*HighlightTheme {
 	return themes
 }
 
+func ResolveAlias(theme interface{}) interface{} {
+	if s, ok := theme.(string); ok {
+		normalized := normalizeThemeID(s)
+		if resolved, ok := THEME_ALIAS_MAP[normalized]; ok {
+			return resolved
+		}
+		return normalized
+	}
+	return theme
+}
+
 func ResolveTheme(theme interface{}) (*HighlightTheme, error) {
 	switch v := theme.(type) {
 	case nil:

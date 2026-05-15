@@ -1,8 +1,7 @@
 package darkplus
 
-import "code-mate-core/theme"
 
-var PythonStyles = theme.ThemeStyleMap{
+var PythonStyles = map[string]string{
 	"comment.line.number-sign.python":        "color: #6A9955;",
 	"constant.language.boolean.python":       "color: #569CD6;",
 	"constant.language.none.python":          "color: #569CD6;",

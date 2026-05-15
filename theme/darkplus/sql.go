@@ -1,8 +1,7 @@
 package darkplus
 
-import "code-mate-core/theme"
 
-var SqlStyles = theme.ThemeStyleMap{
+var SqlStyles = map[string]string{
 	"comment.block.sql":                  "color: #6A9955; font-style: italic;",
 	"comment.line.double-dash.sql":       "color: #6A9955;",
 	"constant.language.boolean.sql":      "color: #569CD6;",

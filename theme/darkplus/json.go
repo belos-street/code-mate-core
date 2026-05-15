@@ -1,8 +1,7 @@
 package darkplus
 
-import "code-mate-core/theme"
 
-var JsonStyles = theme.ThemeStyleMap{
+var JsonStyles = map[string]string{
 	"constant.language.boolean.json":    "color: #569CD6;",
 	"constant.language.null.json":       "color: #569CD6;",
 	"constant.numeric.json":             "color: #B5CEA8;",
