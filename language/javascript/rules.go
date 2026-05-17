@@ -6,6 +6,17 @@ import (
 	"code-mate-core/core"
 )
 
+func GetRules() map[string][]core.GrammarRule {
+	// Deep copy to prevent modification of the original
+	copy_ := make(map[string][]core.GrammarRule, len(GRAMMAR_RULES))
+	for k, v := range GRAMMAR_RULES {
+		rules := make([]core.GrammarRule, len(v))
+		copy(rules, v)
+		copy_[k] = rules
+	}
+	return copy_
+}
+
 var GRAMMAR_RULES = map[string][]core.GrammarRule{
 	// ==================== global 状态 ====================
 	StateGlobal: {
