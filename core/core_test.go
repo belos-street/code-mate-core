@@ -147,6 +147,40 @@ func TestSplitTokenByLineBreak_EmptyString(t *testing.T) {
 	}
 }
 
+func TestSplitTokenByLineBreak_ConsecutiveNewlines(t *testing.T) {
+	tokens := SplitTokenByLineBreak("a\n\nb", "scope.x", "fallback", 1, 1)
+	if len(tokens) != 4 {
+		t.Fatalf("expected 4 tokens, got %d", len(tokens))
+	}
+	if tokens[0].Text != "a" || tokens[0].Line != 1 {
+		t.Errorf("token[0]: expected 'a' line 1, got %q line %d", tokens[0].Text, tokens[0].Line)
+	}
+	if tokens[1].Text != "\n" {
+		t.Errorf("token[1]: expected '\\n', got %q", tokens[1].Text)
+	}
+	// Empty gap between \n and \n produces no token
+	if tokens[2].Text != "\n" {
+		t.Errorf("token[2]: expected '\\n', got %q", tokens[2].Text)
+	}
+	if tokens[3].Text != "b" || tokens[3].Line != 3 {
+		t.Errorf("token[3]: expected 'b' line 3, got %q line %d", tokens[3].Text, tokens[3].Line)
+	}
+}
+
+func TestSplitTokenByLineBreak_StartsWithNewline(t *testing.T) {
+	tokens := SplitTokenByLineBreak("\nhello", "scope.x", "fallback", 1, 1)
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 tokens, got %d", len(tokens))
+	}
+	// Empty before first \n produces no token
+	if tokens[0].Text != "\n" {
+		t.Errorf("token[0]: expected '\\n', got %q", tokens[0].Text)
+	}
+	if tokens[1].Text != "hello" || tokens[1].Line != 2 {
+		t.Errorf("token[1]: expected 'hello' line 2, got %q line %d", tokens[1].Text, tokens[1].Line)
+	}
+}
+
 func TestMatchToken_MatchesFirstRule(t *testing.T) {
 	spec := &TokenizerSpec{
 		InitialState:  "global",
@@ -340,13 +374,106 @@ func TestParse_StringWithStateChange(t *testing.T) {
 	}
 }
 
+func TestParse_CrossLineToken(t *testing.T) {
+	spec := &TokenizerSpec{
+		InitialState:  "global",
+		FallbackScope: "default",
+		Rules: map[string][]GrammarRule{
+			"global": {
+				{Regex: regexp.MustCompile(`^"`), Scope: "string.start.js", PushState: "string-double"},
+			},
+			"string-double": {
+				{Regex: regexp.MustCompile(`^[^"]+`), Scope: "string.content.js"},
+				{Regex: regexp.MustCompile(`^"`), Scope: "string.end.js", PopState: true},
+			},
+		},
+	}
+	stream := Parse("\"hello\nworld\"", spec)
+	if len(stream) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(stream))
+	}
+	// Row 0: " hello
+	if len(stream[0]) < 2 {
+		t.Fatalf("expected at least 2 tokens in row 0, got %d", len(stream[0]))
+	}
+	if stream[0][0].Scope != "string.start.js" {
+		t.Errorf("row0 token[0]: expected 'string.start.js', got %q", stream[0][0].Scope)
+	}
+	if stream[0][1].Scope != "string.content.js" {
+		t.Errorf("row0 token[1]: expected 'string.content.js', got %q", stream[0][1].Scope)
+	}
+	// Row 1: world"
+	if len(stream[1]) < 2 {
+		t.Fatalf("expected at least 2 tokens in row 1, got %d", len(stream[1]))
+	}
+	if stream[1][0].Scope != "string.content.js" {
+		t.Errorf("row1 token[0]: expected 'string.content.js', got %q", stream[1][0].Scope)
+	}
+	if stream[1][1].Scope != "string.end.js" {
+		t.Errorf("row1 token[1]: expected 'string.end.js', got %q", stream[1][1].Scope)
+	}
+}
+
+func TestParse_ConsecutiveNewlines(t *testing.T) {
+	spec := &TokenizerSpec{
+		InitialState:  "global",
+		FallbackScope: "fallback",
+		Rules: map[string][]GrammarRule{
+			"global": {
+				{Regex: regexp.MustCompile(`^\w+`), Scope: "ident"},
+			},
+		},
+	}
+	stream := Parse("a\n\nb", spec)
+	if len(stream) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(stream))
+	}
+	// Row 1: a + \n
+	if len(stream[0]) != 2 || stream[0][0].Text != "a" {
+		t.Errorf("row 0: expected ['a', '\\n'], got %v", stream[0])
+	}
+	// Row 2: \n (empty line)
+	if len(stream[1]) != 1 || stream[1][0].Scope != "fallback" {
+		t.Errorf("row 1: expected [\\n fallback], got %v", stream[1])
+	}
+	// Row 3: b
+	if len(stream[2]) != 1 || stream[2][0].Text != "b" {
+		t.Errorf("row 2: expected ['b'], got %v", stream[2])
+	}
+}
+
+func TestMatchToken_UnknownStateFallbackToGlobal(t *testing.T) {
+	spec := &TokenizerSpec{
+		InitialState:  "global",
+		FallbackScope: "default",
+		Rules: map[string][]GrammarRule{
+			"global": {
+				{Regex: regexp.MustCompile(`^\w+`), Scope: "ident"},
+			},
+		},
+	}
+	ctx := NewParserContext("global")
+	ctx = PushState(ctx, "nonexistent-state")
+	token, newCtx := MatchToken("hello", ctx, spec)
+	if token == nil {
+		t.Fatal("expected token via fallback, got nil")
+	}
+	if token.Scope != "default" {
+		t.Errorf("expected fallback scope 'default' for unknown state, got %q", token.Scope)
+	}
+	// Should still be in the unknown state
+	if CurrentState(newCtx) != "nonexistent-state" {
+		t.Errorf("expected state to remain 'nonexistent-state', got %q", CurrentState(newCtx))
+	}
+}
+
 type mockAdapter struct {
 	id      string
 	aliases []string
 }
 
-func (m mockAdapter) ID() string             { return m.id }
-func (m mockAdapter) Aliases() []string       { return m.aliases }
+func (m mockAdapter) ID() string                    { return m.id }
+func (m mockAdapter) Aliases() []string             { return m.aliases }
 func (m mockAdapter) Parse(code string) TokenStream { return nil }
 
 func TestRegisterLanguage(t *testing.T) {
